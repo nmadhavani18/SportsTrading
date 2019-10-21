@@ -1,13 +1,13 @@
-import configparser  # 1
-import oandapyV20 as opy  # 2
+import configparser
+import oandapyV20 as opy
 from oandapyV20 import API
 from oandapyV20.contrib.factories import InstrumentsCandlesFactory
-import pandas as pd  # 6
-import numpy as np  # 11
-import seaborn as sns; sns.set()  # 18
+import pandas as pd
+import numpy as np
+import seaborn as sns; sns.set()
 import json
 import oandapyV20.endpoints.instruments as instruments
-
+from pprint import pprint
 
 config = configparser.ConfigParser()
 config.read('oanda.cfg')
@@ -21,54 +21,34 @@ def setups():
       "from": "2016-12-08T12:00:00Z",
       "to": "2016-12-10T12:00:00Z"
     }
-    df = list()
+    convertedDF = list()
 
     data = instruments.InstrumentsCandles(instrument = instrument, params = params)
 
     oanda.request(data)
+    for key in data.response.keys():
+        convertedDF.append(data.response.get(key))
 
-    df.append(data.response)
-    print(df)
+    # pprint(pd.DataFrame(convertedDF[2]).set_index('time'))
 
+    df = pd.DataFrame(convertedDF[2]).set_index('time')
     df.index = pd.DatetimeIndex(df.index)
+    df.groupby(pd.Grouper(freq='1H')).agg(['first', 'last', 'max'])
+
+    fs = dict(Open='first', Close='last', Max='max')
+    ag = dict(Ask=fs, Bid=fs)
+    gp = pd.Grouper(freq='1H')
+    d1 = df.rename(columns=str.capitalize).groupby(gp).agg(ag)
+    d1.sort_index(axis=1, ascending=False, inplace=True)
+    d1.columns = d1.columns.map('{0[1]} {0[0]}'.format)
+    print(d1)
+
+    # pprint(df)
 
     df.info()
 
-# def DataFrameFactory(r, colmap=None, conv=None):
-#     def convrec(r, m):
-#         """convrec - convert OANDA candle record.
-#
-#         return array of values, dynamically constructed, corresponding with config in mapping m.
-#         """
-#         v = []
-#         for keys in [x.split(":") for x in m.keys()]:
-#             _v = r.get(keys[0])
-#             for k in keys[1:]:
-#                 _v = _v.get(k)
-#             v.append(_v)
-#
-#         return v
-#
-#     record_converter = convrec if conv is None else conv
-#     column_map_ohlcv = OrderedDict([
-#        ('time', 'D'),
-#        ('mid:o', 'O'),
-#        ('mid:h', 'H'),
-#        ('mid:l', 'L'),
-#        ('mid:c', 'C'),
-#        ('volume', 'V')
-#     ])
-#     cmap = column_map_ohlcv if colmap is None else colmap
-#
-#     df = pd.DataFrame([list(record_converter(rec, cmap)) for rec in r.get('candles')])
-#     df.columns = list(cmap.values())
-#     #df.rename(columns=colmap, inplace=True)  # no need to use rename, cmap values are ordered
-#     df.set_index(pd.DatetimeIndex(df['D']), inplace=True)
-#     del df['D']
-#     df = df.apply(pd.to_numeric)  # OANDA returns string values: make all numeric
-#     return df
+    # momentum algorithmic function
 
-def momentum():
     df['returns'] = np.log(df['closeAsk'] / df['closeAsk'].shift(1))  # 12
 
     cols = []  # 13
